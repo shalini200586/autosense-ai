@@ -1,0 +1,9 @@
+# Optional override for networks that inspect TLS (e.g. a corporate Zscaler proxy).
+# 1) powershell scripts/export_corp_ca.ps1   2) build certs/ca-bundle.pem (see README)   3) use both compose files:
+#    docker compose -f docker-compose.yml -f docker-compose.corp-ca.yml up -d
+services:
+  backend:
+    environment:
+      SSL_CERT_FILE: /certs/ca-bundle.pem
+    volumes:
+      - ./certs/ca-bundle.pem:/certs/ca-bundle.pem:ro
