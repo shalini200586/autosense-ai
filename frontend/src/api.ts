@@ -6,7 +6,7 @@ export type Vehicle = {
 export type Counts = { total: number; available: number; sold: number };
 export type ChatResponse = {
   reply: string; language: "en" | "hi" | "hinglish"; intent: string; vehicles: Vehicle[]; alternatives: Vehicle[];
-  source: "ollama" | "fallback"; fallback_reason: string | null; checked_at: string; test_drive_request_id: number | null;
+  source: "llm" | "fallback"; fallback_reason: string | null; checked_at: string; test_drive_request_id: number | null;
 };
 export type InventoryEvent = {
   type: string; vehicle_id?: string; label?: string; at: string;
@@ -15,9 +15,9 @@ export type InventoryEvent = {
 export type Diagnostics = {
   cache: { hits: number; misses: number; invalidations: number; errors: number; ttl_seconds: number; redis_ok: boolean | null };
   inventory: Counts; websocket_clients: number; events: InventoryEvent[];
-  ollama: { enabled: boolean; model: string }; voice_configured: boolean; admin_token_required: boolean;
+  llm: { enabled: boolean; model: string }; voice_configured: boolean; admin_token_required: boolean;
 };
-export type Health = { status: string; database: boolean; redis: boolean; voice_configured: boolean; ollama_enabled: boolean };
+export type Health = { status: string; database: boolean; redis: boolean; voice_configured: boolean; llm_enabled: boolean };
 
 export class ApiError extends Error {
   constructor(message: string, public status: number, public code?: string) { super(message); }

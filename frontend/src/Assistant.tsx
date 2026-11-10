@@ -142,7 +142,7 @@ export default function Assistant() {
           <div key={i} className="animate-rise space-y-3">
             <div className="max-w-[88%] whitespace-pre-line rounded-2xl rounded-bl-md border border-line bg-white px-4 py-3 text-sm leading-relaxed">{m.data.reply}</div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-mute">
-              {m.data.source === "ollama"
+              {m.data.source === "llm"
                 ? <span className="chip border-line">AI-worded · prices verified from inventory</span>
                 : <span className="chip border-amber-300 bg-amber-50 text-amber-800" title={m.data.fallback_reason ?? ""}>Rule-based fallback{m.data.fallback_reason ? ` · ${m.data.fallback_reason.replace("Rule-based fallback: ", "")}` : ""}</span>}
               <span>checked {new Date(m.data.checked_at).toLocaleTimeString("en-IN")}</span>
