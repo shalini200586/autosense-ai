@@ -5,12 +5,19 @@ extracted with rules so core searches are reproducible and verifiable.
 """
 from __future__ import annotations
 
+import difflib
 import re
 from dataclasses import asdict, dataclass, field
 
 _DEV_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
 
+_NOT_A_CAR_WORD = {"create", "avenue", "value", "price", "about", "what", "with", "under", "lakh", "lakhs", "good",
+                   "mileage", "budget", "other", "these", "those", "sedan", "petrol", "diesel", "automatic", "manual",
+                   "hatchback", "cheap", "best", "show", "cars", "something", "available", "stock", "which"}
+
 MODEL_ALIASES = {
+    "ह्युंडई": "hyundai", "हुंडई": "hyundai", "हुंडे": "hyundai", "टाटा": "tata", "मारुति": "maruti", "मारुती": "maruti",
+    "किआ": "kia", "कीआ": "kia", "महिंद्रा": "mahindra", "होंडा": "honda", "टोयोटा": "toyota",
     "क्रेटा": "creta", "सेल्टोस": "seltos", "नेक्सन": "nexon", "ब्रेज़ा": "brezza", "ब्रेजा": "brezza",
     "वेन्यू": "venue", "स्विफ्ट": "swift", "हैरियर": "harrier", "इनोवा": "innova crysta",
     "क्रिस्टा": "innova crysta", "सिटी": "city", "एक्सयूवी700": "xuv700", "एक्सयूवी300": "xuv300",
@@ -145,6 +152,19 @@ def parse(text: str, catalog: list[tuple[str, str]], last_vehicle_ids: list[str]
     for dev, latin in MODEL_ALIASES.items():
         if dev in low:
             low += f" {latin}"
+    # Typo tolerance for makes/models: "hyndai" -> hyundai, "creata" -> creta.
+    vocab: dict[str, str] = {}
+    for make, model in catalog:
+        vocab[make.lower().split()[0]] = make.lower().split()[0]
+        for w in model.lower().split():
+            vocab[w] = model.lower()
+    vocab = {w: full for w, full in vocab.items() if len(w) >= 4}
+    for tok in set(re.findall(r"[a-z0-9]{4,}", low)):
+        if tok in vocab or tok in _NOT_A_CAR_WORD:
+            continue
+        near = difflib.get_close_matches(tok, vocab.keys(), n=1, cutoff=0.82)
+        if near and tok[0] == near[0][0]:
+            low += f" {vocab[near[0]]}"
     lang = detect_language(text)
     c = Criteria()
     c.max_price, c.min_price = parse_budget(text)
