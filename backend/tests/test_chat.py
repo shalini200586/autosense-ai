@@ -16,8 +16,8 @@ QUERIES = [
 ]
 
 
-def chat(client, msg, last=None):
-    r = client.post("/api/chat", json={"message": msg, "last_vehicle_ids": last or []})
+def chat(client, msg, last=None, criteria=None):
+    r = client.post("/api/chat", json={"message": msg, "last_vehicle_ids": last or [], "last_criteria": criteria})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -115,6 +115,53 @@ def test_test_drive_is_request_not_booking(client):
 def test_chat_input_validation(client):
     assert client.post("/api/chat", json={"message": ""}).status_code == 422
     assert client.post("/api/chat", json={"message": "x" * 601}).status_code == 422
+
+
+def test_typo_in_make_is_understood(client):
+    for typo in ("what about hyndai", "hundai cars", "Hyundai"):
+        d = chat(client, typo)
+        assert d["intent"] == "search" and d["criteria"]["makes"] == ["Hyundai"], typo
+        assert {v["id"] for v in d["vehicles"]} == {"AS-1001", "AS-1006", "AS-1012"}
+        assert all(v["make"] == "Hyundai" and v["status"] == "available" for v in d["vehicles"])
+
+
+def test_typo_in_model_is_understood(client):
+    d = chat(client, "creata price")
+    assert d["intent"] == "model_info" and d["vehicles"][0]["model"] == "Creta"
+
+
+def test_follow_up_keeps_earlier_filters(client):
+    first = chat(client, QUERIES[1])
+    d = chat(client, "what about hyndai", criteria=first["criteria"])
+    assert d["criteria"]["max_price"] == 1_200_000 and d["criteria"]["transmission"] == "Automatic"
+    assert [v["id"] for v in d["vehicles"]] == ["AS-1006", "AS-1001"]  # Hyundai automatic SUVs <= 12 lakh
+    assert "Hyundai" in d["reply"]
+    # a fresh, complete question must NOT inherit old filters
+    fresh = chat(client, "diesel hatchback under 20 lakh", criteria=first["criteria"])
+    assert fresh["criteria"]["transmission"] is None and fresh["criteria"]["max_price"] == 2_000_000
+
+
+def test_invalid_last_criteria_is_ignored(client):
+    d = chat(client, "what about hyndai", criteria={"max_price": "'; drop table", "body_type": "Rocket", "fuel": 5})
+    assert d["criteria"]["max_price"] is None and len(d["vehicles"]) == 3
+
+
+def test_hindi_make_name(client):
+    d = chat(client, "टाटा की गाड़ी दिखाओ")
+    assert d["criteria"]["makes"] == ["Tata"] and {v["make"] for v in d["vehicles"]} == {"Tata"}
+
+
+def test_ordinary_words_are_not_mistaken_for_cars(client):
+    for text in ("good value for money please", "create a budget", "what is the avenue to buy"):
+        d = chat(client, text)
+        assert d["criteria"]["makes"] == [] and d["criteria"]["models"] == [], text
+
+
+def test_unknown_reply_is_helpful_and_lists_stock(client):
+    d = chat(client, "asdf qwerty")
+    assert d["intent"] == "unknown" and d["vehicles"] == []
+    for make in ("Hyundai", "Tata", "Kia"):
+        assert make in d["reply"]
 
 
 def test_greeting_and_unknown(client):
