@@ -17,7 +17,7 @@ flowchart LR
   N --> B[FastAPI backend]
   B -->|authoritative reads/writes| P[(PostgreSQL)]
   B -->|vehicle detail only<br/>cache-aside, TTL 30s| R[(Redis)]
-  B -->|optional wording from verified facts| O[Ollama qwen2.5:7b]
+  B -->|optional wording from verified facts| O[Groq LLM API]
   B -->|server-side key| G1[Gnani Prisma STT]
   B -->|server-side key| G2[Gnani Timbre TTS]
   D -- PATCH --> B
@@ -34,13 +34,13 @@ flowchart LR
 ### Grounding rules
 - Core parsing (budget, transmission, body type, fuel, model, intent, language) is **deterministic** (`backend/app/nlu.py`).
 - Recommendation **cards are built from database rows**, never from model output.
-- Ollama (if reachable) only *words* a short intro from a facts JSON. Its output is **rejected** (and the rule-based answer used, labelled "Rule-based fallback") if it contains any number not in those facts or claims a booking.
+- The Groq model (if a key is set and the API is reachable) only *words* a short intro from a facts JSON. Its output is **rejected** (and the rule-based answer used, labelled "Rule-based fallback") if it contains any number not in those facts or claims a booking.
 - Test-drive messages record a **request only**; nothing is ever "confirmed".
 - Chat answers and filtered lists are never cached; availability-sensitive reads always hit PostgreSQL.
 
 ## Run it
 
-Prerequisites: Docker Desktop. Optional: Ollama with `ollama pull qwen2.5:7b`, and a Gnani API key.
+Prerequisites: Docker Desktop. Optional: a free Groq API key (AI wording) and a Gnani API key (voice).
 
 ```bash
 cp .env.example .env          # add GNANI_API_KEY to enable voice (optional)
@@ -51,7 +51,7 @@ docker compose up -d --build
 - Dealer dashboard: http://localhost:8090/#/dealer (open in a second window)
 - API docs: http://localhost:8000/docs
 
-All ports bind to `127.0.0.1` only. Ollama is reached at `host.docker.internal:11434`; if it isn't running, chat still works with the labelled fallback.
+All ports bind to `127.0.0.1` only. Without `GROQ_API_KEY` (or if Groq is down or rate-limited), chat still works with the labelled rule-based fallback.
 
 ### Develop without Docker for the app
 ```bash
@@ -63,11 +63,11 @@ cd ../frontend && npm install && npm run dev                          # :5173 (p
 
 ### Tests
 ```bash
-cd backend && .venv/Scripts/python -m pytest -q    # SQLite + fake Redis + mocked Ollama/Gnani
+cd backend && .venv/Scripts/python -m pytest -q    # SQLite + fake Redis + mocked Groq/Gnani
 cd frontend && npm run build                       # type-check + production build
 python scripts/demo_check.py                       # end-to-end sold-car demo against the running stack
 ```
-Covered: seed, persistence across restart, SUV/automatic/budget filtering (English, Hinglish, Hindi), sold-car exclusion, price changes, invalid-update rejection, Redis hit/miss/invalidation, Redis outage fallback, WebSocket events and origin check, Ollama unavailable/disabled/hallucination rejection, no fabricated prices or IDs, CORS, admin token, Gnani request formats with mocked responses. A **live Gnani smoke test** (`test_live_gnani_tts_then_stt_roundtrip`) runs only when `GNANI_API_KEY` is set in the environment.
+Covered: seed, persistence across restart, SUV/automatic/budget filtering (English, Hinglish, Hindi), sold-car exclusion, price changes, invalid-update rejection, Redis hit/miss/invalidation, Redis outage fallback, WebSocket events and origin check, AI service unavailable/disabled/rate-limited and hallucination rejection, no fabricated prices or IDs, CORS, admin token, Gnani request formats with mocked responses. A **live Gnani smoke test** (`test_live_gnani_tts_then_stt_roundtrip`) runs only when `GNANI_API_KEY` is set in the environment.
 
 ## API
 | Method | Path | Notes |
@@ -76,7 +76,7 @@ Covered: seed, persistence across restart, SUV/automatic/budget filtering (Engli
 | GET | `/api/vehicles` | `q`, `status`, `type` filters; counts; always from PostgreSQL |
 | GET | `/api/vehicles/{id}` | cache-aside; `X-Cache: HIT/MISS/BYPASS` |
 | PATCH | `/api/vehicles/{id}` | `price_inr` (>0) and/or `status` (`available`/`sold`), optional `expected_version`; `X-Admin-Token` if `ADMIN_TOKEN` set |
-| POST | `/api/chat` | `{message, last_vehicle_ids}` → reply, cards, `source` (`ollama`/`fallback`), `fallback_reason` |
+| POST | `/api/chat` | `{message, last_vehicle_ids}` → reply, cards, `source` (`llm`/`fallback`), `fallback_reason` |
 | GET | `/api/diagnostics` | real cache counters, event log, client count |
 | POST | `/api/voice/transcribe` | multipart `audio` (WAV) → Gnani Prisma |
 | POST | `/api/voice/synthesize` | `{text, language}` → audio via Gnani Timbre |
@@ -109,7 +109,7 @@ backend/.venv/Scripts/python scripts/voice_check.py   # Timbre TTS -> Prisma STT
 
 ## Troubleshooting
 - **Port in use:** the frontend uses 8090 (8080 is commonly taken). Change the mapping in `docker-compose.yml` and `CORS_ORIGINS`.
-- **"Rule-based fallback · Ollama unavailable":** start Ollama, or set `OLLAMA_ENABLED=false`. The first call loads the 7B model (CPU: can exceed `OLLAMA_TIMEOUT`); the backend pre-warms at startup. Raise `OLLAMA_TIMEOUT` if needed.
+- **"Rule-based fallback · AI service ...":** set `GROQ_API_KEY` in `.env` (free key from console.groq.com), or ignore it: answers stay accurate, only the wording is plainer. A 429 means the free-tier rate limit; the app falls back automatically. Model ids change, so set `LLM_MODEL` to a current one from the Groq console if needed.
 - **"Voice setup required":** set `GNANI_API_KEY` in `.env`, then `docker compose up -d`.
 - **Mic blocked:** browsers allow the microphone only on `localhost`/HTTPS.
 - **Reset data:** `docker compose down -v` (removes the Postgres volume; reseeds on next start). Edits otherwise persist across restarts.
