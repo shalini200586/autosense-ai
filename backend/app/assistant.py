@@ -100,6 +100,24 @@ def _reply_search(lang: str, c: nlu.Criteria, vs: list[dict], alts: list[dict]) 
     )
 
 
+def _reply_more(lang: str, c: nlu.Criteria, vs: list[dict]) -> str:
+    d = _desc(c)
+    if not vs:
+        return _t(
+            lang,
+            f"That’s everything: I’ve now shown every available {d} in stock. Want to change the budget or try another make?",
+            f"Bas itna hi: stock mein jitni available {d} thi, sab dikha di. Budget ya make badal kar dekhna chahenge?",
+            f"बस इतना ही: स्टॉक में उपलब्ध सभी {d} दिखा दी गई हैं। बजट या ब्रांड बदलकर देखना चाहेंगे?",
+        )
+    lines = "\n".join(f"{i}. {_line(v)}" for i, v in enumerate(vs, 1))
+    return _t(
+        lang,
+        f"Here {'is' if len(vs) == 1 else 'are'} {len(vs)} more available {d}:\n{lines}",
+        f"Ye rahi {len(vs)} aur available {d}:\n{lines}",
+        f"ये रहीं {len(vs)} और उपलब्ध गाड़ियाँ ({d}):\n{lines}",
+    )
+
+
 def _reply_model_info(lang: str, vs: list[dict]) -> str:
     if not vs:
         return _t(lang, "I don't have that model in the inventory.",
@@ -131,7 +149,7 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
     checked_at = iso(datetime.now(timezone.utc))
 
     # Short follow-ups such as "what about Hyundai?" keep the customer's earlier filters.
-    prev = _coerce_criteria(req.last_criteria)
+    prev = _coerce_criteria(req.last_criteria, {m for m, _ in catalog})
     if (prev and intent in ("search", "unknown") and not c.models and c.has_filters()
             and len(req.message.split()) <= 6 and not (c.max_price and (c.body_type or c.transmission))):
         for f in ("max_price", "min_price", "transmission", "body_type", "fuel"):
@@ -163,6 +181,21 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
         vehicles = [vehicle_to_dict(v) for v in rows]
         fallback_reply = _reply_compare(lang, vehicles)
         use_llm = bool(vehicles)
+    elif intent == "more":
+        if prev is None:
+            intent = "greeting"
+            fallback_reply = _t(
+                lang,
+                "Tell me what you’re looking for first, for example “automatic SUV under 12 lakh”, and I’ll show more.",
+                "Pehle bataiye kya chahiye, jaise “12 lakh ke andar automatic SUV”, phir main aur dikhaunga.",
+                "पहले बताइए आपको क्या चाहिए, जैसे “12 लाख के अंदर ऑटोमैटिक SUV”, फिर मैं और दिखाऊँगा।",
+            )
+        else:
+            c = prev  # keep the same filters in the response so further follow-ups continue from them
+            seen = set(req.seen_vehicle_ids) | set(req.last_vehicle_ids)
+            rows = [v for v in _query(session, prev, only_available=True) if v.id not in seen]
+            vehicles = [vehicle_to_dict(v) for v in rows[:MAX_RESULTS]]
+            fallback_reply = _reply_more(lang, prev, vehicles)
     elif intent == "test_drive":
         target = _resolve_test_drive_target(session, c, req.last_vehicle_ids)
         if target is None:
@@ -214,8 +247,9 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
             "ट्रांसमिशन या ईंधन से पूछ सकते हैं, जैसे “10 लाख के अंदर Hyundai” या “12 लाख के अंदर ऑटोमैटिक SUV”।",
         )
 
-    reply, source, reason = fallback_reply, "fallback", "Deterministic rule-based answer"
+    reply, source, reason = fallback_reply, "rules", None
     if use_llm:
+        source, reason = "fallback", "Rule-based fallback"
         facts = {
             "language": lang,
             "intent": intent,
@@ -243,11 +277,13 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
     )
 
 
-def _coerce_criteria(d: Any) -> nlu.Criteria | None:
+def _coerce_criteria(d: Any, known_makes: set[str] = frozenset()) -> nlu.Criteria | None:
     """Rebuild the previous turn's filters from client-sent JSON, accepting only known, valid values."""
     if not isinstance(d, dict):
         return None
     c = nlu.Criteria()
+    if isinstance(d.get("makes"), list):
+        c.makes = [m for m in d["makes"] if isinstance(m, str) and m in known_makes]
     for k in ("max_price", "min_price"):
         v = d.get(k)
         if isinstance(v, int) and not isinstance(v, bool) and 0 < v <= 100_000_000:

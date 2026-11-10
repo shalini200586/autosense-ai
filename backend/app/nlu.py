@@ -49,6 +49,8 @@ HINGLISH_MARKERS = {
 TEST_DRIVE = ["test drive", "testdrive", "टेस्ट ड्राइव", "test-drive", "drive karna", "drive dekhna"]
 COMPARE = ["compare", "comparison", "vs", "versus", "तुलना", "kaun sa behtar", "which is better", "difference"]
 PRICE_WORDS = ["price", "cost", "kitne", "kitna", "kimat", "keemat", "कीमत", "क़ीमत", "दाम", "rate", "how much"]
+MORE_WORDS = ["more", "show more", "next", "others", "anything else", "any other", "else", "aur", "baaki",
+              "और", "और दिखाओ", "बाकी", "aur dikhao"]
 GREETING = ["hello", "hi", "hey", "namaste", "namaskar", "नमस्ते", "नमस्कार"]
 
 
@@ -196,6 +198,8 @@ def parse(text: str, catalog: list[tuple[str, str]], last_vehicle_ids: list[str]
         intent = "model_info"
     elif c.has_filters():
         intent = "search"
+    elif _has(low, MORE_WORDS) and len(low.split()) <= 4:
+        intent = "more"
     elif _has(low, GREETING) and len(low.split()) <= 4:
         intent = "greeting"
     elif _has(low, ["available", "stock", "inventory", "cars", "gaadi", "gadi", "गाड़ी", "गाडी", "कार"]):

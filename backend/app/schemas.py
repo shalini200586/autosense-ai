@@ -27,6 +27,7 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=600)
     last_vehicle_ids: list[str] = Field(default_factory=list, max_length=10)
     last_criteria: dict[str, Any] | None = None  # previous turn's filters, for "what about X?" follow-ups
+    seen_vehicle_ids: list[str] = Field(default_factory=list, max_length=60)  # already shown, for "show more"
 
 
 class ChatResponse(BaseModel):
@@ -36,7 +37,8 @@ class ChatResponse(BaseModel):
     criteria: dict[str, Any]
     vehicles: list[dict[str, Any]]
     alternatives: list[dict[str, Any]] = []
-    source: Literal["llm", "fallback"]
+    # llm: AI-worded | rules: answered from verified inventory by design | fallback: AI wording failed
+    source: Literal["llm", "rules", "fallback"]
     fallback_reason: str | None = None
     checked_at: str
     test_drive_request_id: int | None = None
