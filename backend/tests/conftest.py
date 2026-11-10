@@ -39,7 +39,7 @@ class FakeRedis:
         return True
 
 
-def unreachable_ollama() -> httpx.MockTransport:
+def unreachable_llm() -> httpx.MockTransport:
     def handler(request):
         raise httpx.ConnectError("connection refused")
 
@@ -50,7 +50,8 @@ def make_settings(tmp_path, **kw) -> Settings:
     base = dict(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         cors_origins=("http://localhost:5173",),
-        ollama_enabled=True,
+        llm_enabled=True,
+        groq_api_key="test-groq-key",
         gnani_api_key="",
     )
     base.update(kw)
@@ -64,7 +65,7 @@ def redis_fake():
 
 @pytest.fixture
 def client(tmp_path, redis_fake):
-    app = create_app(make_settings(tmp_path), redis_client=redis_fake, ollama_transport=unreachable_ollama())
+    app = create_app(make_settings(tmp_path), redis_client=redis_fake, llm_transport=unreachable_llm())
     with TestClient(app) as c:
         c.app_ref = app
         yield c

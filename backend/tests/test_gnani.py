@@ -6,12 +6,12 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from conftest import FakeRedis, make_settings, unreachable_ollama
+from conftest import FakeRedis, make_settings, unreachable_llm
 
 
 def _client(tmp_path, handler, key="test-key"):
     s = make_settings(tmp_path, gnani_api_key=key)
-    app = create_app(s, redis_client=FakeRedis(), ollama_transport=unreachable_ollama(),
+    app = create_app(s, redis_client=FakeRedis(), llm_transport=unreachable_llm(),
                      gnani_transport=httpx.MockTransport(handler))
     return TestClient(app)
 
@@ -99,6 +99,26 @@ def test_tts_error(tmp_path):
         assert r.status_code == 502 and "voice not available" in r.json()["detail"]["message"]
 
 
+def test_spyne_profile_disables_voice_and_hides_vendor(tmp_path):
+    s = make_settings(tmp_path, gnani_api_key="k", demo_profile="spyne")
+    app = create_app(s, redis_client=FakeRedis(), llm_transport=unreachable_llm(),
+                     gnani_transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"transcript": "x"})))
+    with TestClient(app) as c:
+        health = c.get("/api/health").json()
+        assert health["profile"] == "spyne" and health["voice_enabled"] is False and health["voice_configured"] is False
+        assert c.post("/api/voice/synthesize", json={"text": "hi", "language": "en"}).status_code == 404
+        r = c.post("/api/voice/transcribe", files={"audio": ("a.wav", b"RIFF", "audio/wav")})
+        assert r.status_code == 404 and r.json()["detail"]["code"] == "voice_disabled"
+        for path in ("/api/health", "/api/diagnostics"):
+            assert "gnani" not in c.get(path).text.lower()
+        assert c.post("/api/chat", json={"message": "automatic SUV 12 lakh"}).status_code == 200
+
+
+def test_gnani_profile_is_default(client):
+    h = client.get("/api/health").json()
+    assert h["profile"] == "gnani" and h["voice_enabled"] is True
+
+
 def test_api_key_never_in_responses(tmp_path):
     with _client(tmp_path, lambda req: httpx.Response(200, json={"transcript": "x"}), key="SUPERSECRET") as c:
         for path in ("/api/health", "/api/diagnostics"):
@@ -110,7 +130,7 @@ def test_live_gnani_tts_then_stt_roundtrip(tmp_path):
     """Real API smoke test: synthesize a Hindi phrase with Timbre, then transcribe it with Prisma."""
     s = Settings.from_env()
     app = create_app(make_settings(tmp_path, gnani_api_key=s.gnani_api_key), redis_client=FakeRedis(),
-                     ollama_transport=unreachable_ollama())
+                     llm_transport=unreachable_llm())
     with TestClient(app) as c:
         tts = c.post("/api/voice/synthesize", json={"text": "मुझे बारह लाख के अंदर ऑटोमैटिक एसयूवी चाहिए", "language": "hi"})
         assert tts.status_code == 200 and tts.content[:4] == b"RIFF"

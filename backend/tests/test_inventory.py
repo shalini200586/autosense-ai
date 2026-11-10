@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import create_app
-from conftest import FakeRedis, make_settings, unreachable_ollama
+from conftest import FakeRedis, make_settings, unreachable_llm
 
 
 def test_initial_seed(client):
@@ -18,9 +18,9 @@ def test_initial_seed(client):
 
 def test_persistence_across_restart(tmp_path):
     settings = make_settings(tmp_path)
-    with TestClient(create_app(settings, redis_client=FakeRedis(), ollama_transport=unreachable_ollama())) as c:
+    with TestClient(create_app(settings, redis_client=FakeRedis(), llm_transport=unreachable_llm())) as c:
         assert c.patch("/api/vehicles/AS-1003", json={"price_inr": 777000, "status": "sold"}).status_code == 200
-    with TestClient(create_app(settings, redis_client=FakeRedis(), ollama_transport=unreachable_ollama())) as c2:
+    with TestClient(create_app(settings, redis_client=FakeRedis(), llm_transport=unreachable_llm())) as c2:
         v = c2.get("/api/vehicles/AS-1003").json()
         assert v["price_inr"] == 777000 and v["status"] == "sold"
         assert c2.get("/api/vehicles").json()["counts"]["total"] == 12  # not re-seeded
@@ -50,7 +50,7 @@ def test_list_filters(client):
 
 def test_admin_token_enforced_when_configured(tmp_path):
     s = make_settings(tmp_path, admin_token="secret")
-    with TestClient(create_app(s, redis_client=FakeRedis(), ollama_transport=unreachable_ollama())) as c:
+    with TestClient(create_app(s, redis_client=FakeRedis(), llm_transport=unreachable_llm())) as c:
         assert c.patch("/api/vehicles/AS-1001", json={"price_inr": 1}).status_code == 401
         ok = c.patch("/api/vehicles/AS-1001", json={"price_inr": 1000000}, headers={"X-Admin-Token": "secret"})
         assert ok.status_code == 200
