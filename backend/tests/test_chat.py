@@ -164,6 +164,48 @@ def test_unknown_reply_is_helpful_and_lists_stock(client):
         assert make in d["reply"]
 
 
+def _more(client, crit, seen, text="more"):
+    r = client.post("/api/chat", json={"message": text, "last_criteria": crit, "seen_vehicle_ids": seen,
+                                       "last_vehicle_ids": seen[-4:]})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_show_more_pages_through_remaining_matches(client):
+    first = chat(client, QUERIES[1])
+    seen = [v["id"] for v in first["vehicles"]]
+    assert len(seen) == 4  # 5 cars match; the page size is 4
+    more = _more(client, first["criteria"], seen)
+    assert more["intent"] == "more" and [v["id"] for v in more["vehicles"]] == ["AS-1002"]
+    assert more["criteria"]["max_price"] == 1_200_000  # filters carry on for later follow-ups
+    done = _more(client, first["criteria"], seen + ["AS-1002"], "aur dikhao")
+    assert done["vehicles"] == [] and "everything" in done["reply"] or "Bas itna" in done["reply"]
+
+
+def test_more_excludes_cars_sold_in_the_meantime(client):
+    first = chat(client, QUERIES[1])
+    seen = [v["id"] for v in first["vehicles"]]
+    client.patch("/api/vehicles/AS-1002", json={"status": "sold"})
+    assert _more(client, first["criteria"], seen)["vehicles"] == []
+
+
+def test_more_after_a_make_follow_up_keeps_the_make(client):
+    first = chat(client, "what about hyndai")
+    more = _more(client, first["criteria"], [v["id"] for v in first["vehicles"]])
+    assert more["vehicles"] == [] and more["criteria"]["makes"] == ["Hyundai"]
+
+
+def test_more_without_context_asks_what_to_search(client):
+    d = chat(client, "more")
+    assert d["vehicles"] == [] and d["intent"] == "greeting" and "automatic SUV" in d["reply"]
+
+
+def test_source_labels(client):
+    assert chat(client, "namaste")["source"] == "rules"          # never needs the model: neutral label
+    assert chat(client, "asdf qwerty")["source"] == "rules"
+    assert chat(client, QUERIES[1])["source"] == "fallback"      # model unreachable in tests: real fallback
+
+
 def test_greeting_and_unknown(client):
     assert chat(client, "namaste")["intent"] == "greeting"
     assert chat(client, "asdf qwerty")["vehicles"] == []
