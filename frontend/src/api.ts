@@ -7,7 +7,7 @@ export type Counts = { total: number; available: number; sold: number };
 export type ChatResponse = {
   reply: string; language: "en" | "hi" | "hinglish"; intent: string; criteria: Record<string, unknown>;
   vehicles: Vehicle[]; alternatives: Vehicle[];
-  source: "llm" | "fallback"; fallback_reason: string | null; checked_at: string; test_drive_request_id: number | null;
+  source: "llm" | "rules" | "fallback"; fallback_reason: string | null; checked_at: string; test_drive_request_id: number | null;
 };
 export type InventoryEvent = {
   type: string; vehicle_id?: string; label?: string; at: string;
@@ -56,8 +56,9 @@ export const api = {
       body: JSON.stringify(body),
     }),
   diagnostics: () => req<Diagnostics>("/api/diagnostics"),
-  chat: (message: string, last_vehicle_ids: string[], last_criteria: Record<string, unknown> | null = null) =>
-    req<ChatResponse>("/api/chat", json({ message, last_vehicle_ids, last_criteria })),
+  chat: (message: string, last_vehicle_ids: string[], last_criteria: Record<string, unknown> | null = null,
+         seen_vehicle_ids: string[] = []) =>
+    req<ChatResponse>("/api/chat", json({ message, last_vehicle_ids, last_criteria, seen_vehicle_ids })),
   transcribe: async (wav: Blob) => {
     const fd = new FormData();
     fd.append("audio", wav, "speech.wav");

@@ -31,14 +31,24 @@ export default function Assistant() {
   const recorder = useRef<WavRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const scroller = useRef<HTMLDivElement>(null);
   const lastIds = useRef<string[]>([]);
   const lastCriteria = useRef<Record<string, unknown> | null>(null); // lets "what about Hyundai?" keep earlier filters
+  const seenIds = useRef<string[]>([]); // cars already shown for the current search, so "more" shows new ones
 
   const checkHealth = useCallback(() => {
     api.health().then((h) => { setHealth(h); setOffline(false); }).catch(() => setOffline(true));
   }, []);
   useEffect(() => { checkHealth(); const t = setInterval(checkHealth, 10000); return () => clearInterval(t); }, [checkHealth]);
-  useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
+  // Keep the newest answer in view. If a reply (text + cards) is taller than the chat area, align its top so the
+  // intro and first cards are visible instead of jumping to the very bottom.
+  useEffect(() => {
+    const sc = scroller.current;
+    const last = msgs.length - 1;
+    const el = last >= 0 && msgs[last].role === "assistant" ? document.getElementById(`msg-${last}`) : null;
+    if (sc && el && el.offsetHeight > sc.clientHeight - 24) sc.scrollTo({ top: el.offsetTop - 8, behavior: "smooth" });
+    else bottom.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [msgs, busy]);
 
   // Inventory changed: never rewrite old answers; just flag them as possibly outdated.
   const socket = useInventorySocket((e) => {
@@ -70,9 +80,11 @@ export default function Assistant() {
     setMsgs((p) => [...p, { role: "user", text: t, viaVoice }]);
     setBusy(true);
     try {
-      const data = await api.chat(t, lastIds.current, lastCriteria.current);
-      if (data.vehicles.length) lastIds.current = data.vehicles.map((v) => v.id);
-      if (data.intent === "search") lastCriteria.current = data.criteria;
+      const data = await api.chat(t, lastIds.current, lastCriteria.current, seenIds.current);
+      const ids = data.vehicles.map((v) => v.id);
+      if (ids.length) lastIds.current = ids;
+      if (data.intent === "search") { lastCriteria.current = data.criteria; seenIds.current = ids; }
+      else if (data.intent === "more") { lastCriteria.current = data.criteria; seenIds.current = [...seenIds.current, ...ids]; }
       setMsgs((p) => {
         const next = [...p, { role: "assistant", data } as Msg];
         if (viaVoice && health?.voice_configured) speak(next.length - 1, data.reply, data.language);
@@ -122,7 +134,7 @@ export default function Assistant() {
           <WifiOff size={15} /> Can’t reach the assistant right now. Check that the backend is running.
         </div>
       )}
-      <div className="flex-1 space-y-5 overflow-y-auto pb-4 pr-1" aria-live="polite">
+      <div ref={scroller} className="relative flex-1 space-y-4 overflow-y-auto pb-3 pr-1" aria-live="polite">
         {msgs.length === 0 && (
           <div className="animate-rise pt-10 text-center">
             <h1 className="text-2xl font-semibold tracking-tight">Find your next car</h1>
@@ -141,11 +153,13 @@ export default function Assistant() {
         ) : m.role === "error" ? (
           <div key={i} role="alert" className="flex animate-rise items-center gap-2 text-sm text-red-700"><AlertTriangle size={15} />{m.text}</div>
         ) : (
-          <div key={i} className="animate-rise space-y-3">
-            <div className="max-w-[88%] whitespace-pre-line rounded-2xl rounded-bl-md border border-line bg-white px-4 py-3 text-sm leading-relaxed">{m.data.reply}</div>
+          <div key={i} id={`msg-${i}`} className="animate-rise space-y-2.5">
+            <div className="max-w-[88%] whitespace-pre-line rounded-2xl rounded-bl-md border border-line bg-white px-4 py-2.5 text-sm leading-relaxed">{shownText(m.data)}</div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-mute">
               {m.data.source === "llm"
                 ? <span className="chip border-line">AI-worded · prices verified from inventory</span>
+                : m.data.source === "rules"
+                ? <span className="chip border-line">Answered from verified inventory</span>
                 : <span className="chip border-amber-300 bg-amber-50 text-amber-800" title={m.data.fallback_reason ?? ""}>Rule-based fallback{m.data.fallback_reason ? ` · ${m.data.fallback_reason.replace("Rule-based fallback: ", "")}` : ""}</span>}
               <span>checked {new Date(m.data.checked_at).toLocaleTimeString("en-IN")}</span>
               {voiceReady && <button className="btn px-2 py-0.5 text-xs" disabled={speaking === i} onClick={() => speak(i, m.data.reply, m.data.language)}>
@@ -157,7 +171,7 @@ export default function Assistant() {
               </div>
             )}
             {(m.data.vehicles.length > 0 || m.data.alternatives.length > 0) && (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 {m.data.alternatives.length > 0 && m.data.vehicles.length === 0 && <p className="col-span-full text-xs text-mute">Above your budget:</p>}
                 {(m.data.vehicles.length ? m.data.vehicles : m.data.alternatives).map((v) => <Card key={v.id} v={v} />)}
               </div>
@@ -188,21 +202,31 @@ export default function Assistant() {
   );
 }
 
+/** The cards already show each car, so hide the numbered list repeated inside the text bubble
+ *  (the full text, with prices, is still what gets spoken by "Listen"). */
+function shownText(d: ChatResponse): string {
+  if (!["search", "more"].includes(d.intent) || d.vehicles.length + d.alternatives.length === 0) return d.reply;
+  const t = d.reply.split("\n").filter((l) => !/^\s*(\d+\.|[-•*])\s/.test(l)).join("\n").trim();
+  return t || d.reply;
+}
+
 function Card({ v }: { v: Vehicle }) {
   const sold = v.status === "sold";
   return (
-    <article className="rounded-xl border border-line bg-white p-4 transition hover:shadow-sm">
+    <article className="rounded-xl border border-line bg-white px-3.5 py-3 transition hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <h3 className="font-medium">{v.make} {v.model}</h3>
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold">{v.make} {v.model}</h3>
           <p className="text-xs text-mute">{v.variant} · {v.year}</p>
         </div>
-        <span className={`chip ${sold ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{sold ? "Sold" : "Available"}</span>
+        <span className={`chip shrink-0 ${sold ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{sold ? "Sold" : "Available"}</span>
       </div>
-      <div className="mt-3 text-xl font-semibold tabular-nums">{inr(v.price_inr)}</div>
-      <div className="text-xs text-mute">{lakh(v.price_inr)}</div>
-      <p className="mt-3 text-xs text-mute">{v.body_type} · {v.fuel} · {v.transmission} · {v.mileage_km.toLocaleString("en-IN")} km</p>
-      <p className="mt-2 font-mono text-[10px] text-neutral-400">{v.id} · demo listing</p>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span className="text-lg font-semibold tabular-nums">{inr(v.price_inr)}</span>
+        <span className="text-xs text-mute">{lakh(v.price_inr)}</span>
+      </div>
+      <p className="mt-1 text-xs text-mute">{v.body_type} · {v.fuel} · {v.transmission} · {v.mileage_km.toLocaleString("en-IN")} km</p>
+      <p className="mt-1 font-mono text-[10px] text-neutral-400">{v.id} · demo listing</p>
     </article>
   );
 }
