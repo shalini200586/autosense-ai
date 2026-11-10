@@ -32,6 +32,7 @@ export default function Assistant() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const lastIds = useRef<string[]>([]);
+  const lastCriteria = useRef<Record<string, unknown> | null>(null); // lets "what about Hyundai?" keep earlier filters
 
   const checkHealth = useCallback(() => {
     api.health().then((h) => { setHealth(h); setOffline(false); }).catch(() => setOffline(true));
@@ -69,8 +70,9 @@ export default function Assistant() {
     setMsgs((p) => [...p, { role: "user", text: t, viaVoice }]);
     setBusy(true);
     try {
-      const data = await api.chat(t, lastIds.current);
+      const data = await api.chat(t, lastIds.current, lastCriteria.current);
       if (data.vehicles.length) lastIds.current = data.vehicles.map((v) => v.id);
+      if (data.intent === "search") lastCriteria.current = data.criteria;
       setMsgs((p) => {
         const next = [...p, { role: "assistant", data } as Msg];
         if (viaVoice && health?.voice_configured) speak(next.length - 1, data.reply, data.language);
