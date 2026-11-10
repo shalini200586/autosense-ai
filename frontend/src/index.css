@@ -7,8 +7,8 @@ body { @apply bg-paper text-ink font-sans antialiased; }
 :focus-visible { @apply outline-none ring-2 ring-accent/50 ring-offset-1; }
 
 @layer components {
-  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-ink transition hover:border-gold hover:bg-gold-soft disabled:opacity-40 disabled:cursor-not-allowed; }
-  .btn-primary { @apply border-transparent bg-navy text-white hover:bg-navy-soft hover:border-transparent; }
-  .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm placeholder:text-neutral-400 focus:border-gold; }
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg border border-line bg-white px-3 py-1.5 text-sm font-medium text-ink transition hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed; }
+  .btn-primary { @apply border-transparent bg-ink text-white hover:bg-neutral-700; }
+  .input { @apply w-full rounded-lg border border-line bg-white px-3 py-2 text-sm placeholder:text-neutral-400; }
   .chip { @apply inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium; }
 }

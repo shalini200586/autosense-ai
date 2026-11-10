@@ -14,19 +14,18 @@ export default function App() {
   }, []);
 
   const tab = (id: "assistant" | "dealer", label: string, icon: React.ReactNode) => (
-    <a href={`#/${id}`} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === id ? "bg-gold text-navy" : "text-white/70 hover:text-white"}`}>
+    <a href={`#/${id}`} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${view === id ? "bg-ink text-white" : "text-mute hover:text-ink"}`}>
       {icon}{label}
     </a>
   );
 
   return (
     <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-10 border-b-2 border-gold bg-navy text-white shadow-sm">
+      <header className="sticky top-0 z-10 border-b border-line bg-paper/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-gold" />
-            <span className="text-[15px] font-semibold tracking-tight">AutoSense <span className="text-gold">AI</span></span>
-            <span className="chip border-gold/50 text-gold">Demo data</span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-[15px] font-semibold tracking-tight">AutoSense AI</span>
+            <span className="chip border-line text-mute">Demo data</span>
           </div>
           <nav className="flex gap-1">
             {tab("assistant", "Customer", <MessageSquare size={15} />)}

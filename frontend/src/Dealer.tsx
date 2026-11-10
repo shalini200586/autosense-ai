@@ -46,7 +46,7 @@ export default function Dealer() {
     <div className="animate-rise space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-navy">Inventory</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Inventory</h1>
           <p className="mt-1 text-sm text-mute">PostgreSQL is the source of truth. Changes commit, invalidate Redis, then notify every connected client.</p>
         </div>
         <div className="flex items-center gap-2 text-xs text-mute">
@@ -59,12 +59,10 @@ export default function Dealer() {
       {error && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
 
       <div className="grid grid-cols-3 gap-3">
-        {([["Total", counts?.total, "bg-navy text-white border-navy", "text-gold"],
-           ["Available", counts?.available, "bg-emerald-soft text-emerald-deep border-emerald-deep/20", "text-emerald-deep/70"],
-           ["Sold", counts?.sold, "bg-wine-soft text-wine-deep border-wine-deep/20", "text-wine-deep/70"]] as const).map(([l, v, box, sub]) => (
-          <div key={l} className={`rounded-xl border px-4 py-3 ${box}`}>
-            <div className={`text-xs font-medium uppercase tracking-wider ${sub}`}>{l}</div>
-            <div className="text-3xl font-semibold tabular-nums">{v ?? "–"}</div>
+        {[["Total", counts?.total], ["Available", counts?.available], ["Sold", counts?.sold]].map(([l, v]) => (
+          <div key={l as string} className="rounded-xl border border-line bg-white px-4 py-3">
+            <div className="text-xs text-mute">{l}</div>
+            <div className="text-2xl font-semibold tabular-nums">{v ?? "–"}</div>
           </div>
         ))}
       </div>
@@ -88,7 +86,7 @@ export default function Dealer() {
 
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
         <table className="w-full text-sm">
-          <thead className="border-b border-line bg-gold-soft/60 text-left text-xs uppercase tracking-wider text-gold-deep">
+          <thead className="border-b border-line text-left text-xs text-mute">
             <tr>{["ID", "Vehicle", "Specs", "Price (₹)", "Status", "Updated"].map((h) => <th key={h} className="px-4 py-2.5 font-medium">{h}</th>)}</tr>
           </thead>
           <tbody>
@@ -101,7 +99,7 @@ export default function Dealer() {
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-xl border border-line bg-white p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-navy"><Database size={15} className="text-gold" /> Redis diagnostics</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Database size={15} /> Redis diagnostics</h2>
           {diag ? (
             <>
               <dl className="grid grid-cols-4 gap-2 text-center">
@@ -117,7 +115,7 @@ export default function Dealer() {
           ) : <p className="text-sm text-mute">Diagnostics unavailable.</p>}
         </section>
         <section className="rounded-xl border border-line bg-white p-4">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-navy"><Radio size={15} className="text-gold" /> Real-time event log</h2>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold"><Radio size={15} /> Real-time event log</h2>
           <ul className="max-h-40 space-y-1.5 overflow-y-auto text-xs">
             {events.length === 0 && <li className="text-mute">Waiting for inventory changes…</li>}
             {events.map((e, i) => (
@@ -155,7 +153,7 @@ function Row({ v, flash, onUpdate }: { v: Vehicle; flash: boolean; onUpdate: (id
         <div className="inline-flex rounded-lg border border-line p-0.5 text-xs" role="group" aria-label={`Status for ${v.model}`}>
           {(["available", "sold"] as const).map((s) => (
             <button key={s} onClick={() => v.status !== s && onUpdate(v.id, { status: s })} aria-pressed={v.status === s}
-              className={`rounded-md px-2.5 py-1 font-medium capitalize transition ${v.status === s ? (s === "sold" ? "bg-wine-deep text-white" : "bg-emerald-deep text-white") : "text-mute hover:text-ink"}`}>{s}</button>
+              className={`rounded-md px-2.5 py-1 font-medium capitalize transition ${v.status === s ? (s === "sold" ? "bg-red-600 text-white" : "bg-emerald-600 text-white") : "text-mute hover:text-ink"}`}>{s}</button>
           ))}
         </div>
       </td>

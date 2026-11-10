@@ -120,11 +120,8 @@ export default function Assistant() {
       <div className="flex-1 space-y-5 overflow-y-auto pb-4 pr-1" aria-live="polite">
         {msgs.length === 0 && (
           <div className="animate-rise pt-10 text-center">
-            <div className="mx-auto max-w-xl rounded-2xl bg-navy px-6 py-8 text-white shadow-sm ring-1 ring-gold/40">
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold">Inventory-verified</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Find your next car</h1>
-              <p className="mx-auto mt-3 max-w-md text-sm text-white/70">Ask in English, Hindi or Hinglish. Every price and availability you see comes from the live dealership inventory.</p>
-            </div>
+            <h1 className="text-2xl font-semibold tracking-tight">Find your next car</h1>
+            <p className="mx-auto mt-2 max-w-md text-sm text-mute">Ask in English, Hindi or Hinglish. Every price and availability you see comes from the live dealership inventory.</p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               {SUGGESTIONS.map((s) => <button key={s} className="btn" onClick={() => send(s)}>{s}</button>)}
             </div>
@@ -132,7 +129,7 @@ export default function Assistant() {
         )}
         {msgs.map((m, i) => m.role === "user" ? (
           <div key={i} className="flex animate-rise justify-end">
-            <div className="max-w-[80%] rounded-2xl rounded-br-md bg-navy px-4 py-2.5 text-sm text-white shadow-sm">
+            <div className="max-w-[80%] rounded-2xl rounded-br-md bg-ink px-4 py-2.5 text-sm text-white">
               {m.viaVoice && <Mic size={12} className="mr-1.5 inline opacity-70" />}{m.text}
             </div>
           </div>
@@ -143,7 +140,7 @@ export default function Assistant() {
             <div className="max-w-[88%] whitespace-pre-line rounded-2xl rounded-bl-md border border-line bg-white px-4 py-3 text-sm leading-relaxed">{m.data.reply}</div>
             <div className="flex flex-wrap items-center gap-2 text-xs text-mute">
               {m.data.source === "ollama"
-                ? <span className="chip border-gold/40 bg-gold-soft text-gold-deep">AI-worded · prices verified from inventory</span>
+                ? <span className="chip border-line">AI-worded · prices verified from inventory</span>
                 : <span className="chip border-amber-300 bg-amber-50 text-amber-800" title={m.data.fallback_reason ?? ""}>Rule-based fallback{m.data.fallback_reason ? ` · ${m.data.fallback_reason.replace("Rule-based fallback: ", "")}` : ""}</span>}
               <span>checked {new Date(m.data.checked_at).toLocaleTimeString("en-IN")}</span>
               {voiceReady && <button className="btn px-2 py-0.5 text-xs" disabled={speaking === i} onClick={() => speak(i, m.data.reply, m.data.language)}>
@@ -189,15 +186,15 @@ export default function Assistant() {
 function Card({ v }: { v: Vehicle }) {
   const sold = v.status === "sold";
   return (
-    <article className="overflow-hidden rounded-xl border border-line border-t-2 border-t-gold bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-md">
+    <article className="rounded-xl border border-line bg-white p-4 transition hover:shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-semibold text-navy">{v.make} {v.model}</h3>
+          <h3 className="font-medium">{v.make} {v.model}</h3>
           <p className="text-xs text-mute">{v.variant} · {v.year}</p>
         </div>
-        <span className={`chip ${sold ? "border-wine-deep/30 bg-wine-soft text-wine-deep" : "border-emerald-deep/30 bg-emerald-soft text-emerald-deep"}`}>{sold ? "Sold" : "Available"}</span>
+        <span className={`chip ${sold ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"}`}>{sold ? "Sold" : "Available"}</span>
       </div>
-      <div className="mt-3 text-xl font-semibold tabular-nums text-navy">{inr(v.price_inr)}</div>
+      <div className="mt-3 text-xl font-semibold tabular-nums">{inr(v.price_inr)}</div>
       <div className="text-xs text-mute">{lakh(v.price_inr)}</div>
       <p className="mt-3 text-xs text-mute">{v.body_type} · {v.fuel} · {v.transmission} · {v.mileage_km.toLocaleString("en-IN")} km</p>
       <p className="mt-2 font-mono text-[10px] text-neutral-400">{v.id} · demo listing</p>
