@@ -72,7 +72,7 @@ async def explain(settings: Settings, facts: dict[str, Any], user_message: str,
     payload = {
         "model": settings.llm_model,
         "temperature": 0.2,
-        "max_tokens": 200,
+        "max_tokens": 600,  # headroom: reasoning models spend some tokens thinking
         "messages": [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"Customer said: {user_message}\n\nVerified facts (JSON):\n"

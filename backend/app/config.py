@@ -31,7 +31,7 @@ class Settings:
     # Optional AI wording via Groq's OpenAI-compatible API (https://console.groq.com). No key => rule-based answers.
     llm_enabled: bool = True
     llm_base_url: str = "https://api.groq.com/openai/v1"
-    llm_model: str = "llama-3.3-70b-versatile"  # check console.groq.com for currently available models
+    llm_model: str = "openai/gpt-oss-20b"  # model ids change: see console.groq.com or GET /openai/v1/models
     llm_timeout: float = 20.0
     groq_api_key: str = field(default="", repr=False)
     gnani_api_key: str = field(default="", repr=False)

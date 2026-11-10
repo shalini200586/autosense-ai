@@ -221,7 +221,7 @@ def test_llm_request_format(tmp_path):
         assert chat(c, QUERIES[0])["source"] == "llm"
     assert seen["url"] == "https://api.groq.com/openai/v1/chat/completions"
     assert seen["auth"] == "Bearer test-groq-key"
-    assert seen["body"]["model"] == "llama-3.3-70b-versatile" and seen["body"]["messages"][0]["role"] == "system"
+    assert seen["body"]["model"] == "openai/gpt-oss-20b" and seen["body"]["messages"][0]["role"] == "system"
     facts = seen["body"]["messages"][1]["content"]
     assert "AS-1003" in facts and "AS-1005" not in facts  # only verified, available vehicles are shared
 
