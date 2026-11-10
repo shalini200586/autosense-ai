@@ -28,7 +28,8 @@ SYSTEM = (
     "Use ONLY the facts in the JSON the user provides. Never invent vehicles, prices, availability, "
     "features or bookings. Do not list prices or numbers that are not in the JSON. "
     "Reply in the same language/style as the customer (English, Hindi in Devanagari, or Hinglish in Latin script). "
-    "Write 2-3 short sentences that introduce the verified options; the app shows full cards separately. "
+    "Write 1-2 short sentences only. Do NOT list or enumerate the vehicles and do not use bullet points: the app "
+    "already shows a card for each one. You may mention how many there are and the price range. "
     "Never say a test drive or booking is confirmed."
 )
 
