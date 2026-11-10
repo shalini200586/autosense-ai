@@ -37,7 +37,7 @@ export default function Assistant() {
     api.health().then((h) => { setHealth(h); setOffline(false); }).catch(() => setOffline(true));
   }, []);
   useEffect(() => { checkHealth(); const t = setInterval(checkHealth, 10000); return () => clearInterval(t); }, [checkHealth]);
-  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [msgs, busy]);
+  useEffect(() => { bottom.current?.scrollIntoView({ behavior: "smooth" }); }, [msgs, busy]);
 
   // Inventory changed: never rewrite old answers; just flag them as possibly outdated.
   const socket = useInventorySocket((e) => {
