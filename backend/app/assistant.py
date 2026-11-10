@@ -122,7 +122,7 @@ def _reply_compare(lang: str, vs: list[dict]) -> str:
 # ---- main entry --------------------------------------------------------------------
 
 async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
-                      ollama_transport: httpx.AsyncBaseTransport | None = None) -> ChatResponse:
+                      llm_transport: httpx.AsyncBaseTransport | None = None) -> ChatResponse:
     catalog = list(session.execute(select(Vehicle.make, Vehicle.model).distinct()).all())
     parsed = nlu.parse(req.message, [(m, mo) for m, mo in catalog], req.last_vehicle_ids)
     c, lang, intent = parsed.criteria, parsed.language, parsed.intent
@@ -210,15 +210,15 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
             "result_count": len(vehicles),
         }
         try:
-            reply = await llm.explain(settings, facts, req.message, transport=ollama_transport)
+            reply = await llm.explain(settings, facts, req.message, transport=llm_transport)
             # Append the verified list so the text always carries real data.
-            source, reason = "ollama", None
+            source, reason = "llm", None
             if vehicles or alternatives:
                 reply = reply.rstrip() + "\n" + "\n".join(
                     f"{i}. {_line(v)}" for i, v in enumerate(vehicles or alternatives, 1))
-        except llm.OllamaUnavailable as exc:
+        except llm.LLMUnavailable as exc:
             reason = f"Rule-based fallback: {exc}"
-        except llm.OllamaRejected as exc:
+        except llm.LLMRejected as exc:
             reason = f"Rule-based fallback: AI wording rejected ({exc})"
 
     return ChatResponse(

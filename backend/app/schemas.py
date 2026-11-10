@@ -35,7 +35,7 @@ class ChatResponse(BaseModel):
     criteria: dict[str, Any]
     vehicles: list[dict[str, Any]]
     alternatives: list[dict[str, Any]] = []
-    source: Literal["ollama", "fallback"]
+    source: Literal["llm", "fallback"]
     fallback_reason: str | None = None
     checked_at: str
     test_drive_request_id: int | None = None

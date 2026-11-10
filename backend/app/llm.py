@@ -1,4 +1,4 @@
-"""Optional Ollama explainer.
+"""Optional AI wording via Groq's OpenAI-compatible chat API.
 
 The model only *words* an answer from verified facts. Its output is rejected
 (and the rule-based answer used instead) if it contains numbers that are not in
@@ -15,11 +15,11 @@ import httpx
 from .config import Settings
 
 
-class OllamaUnavailable(Exception):
+class LLMUnavailable(Exception):
     pass
 
 
-class OllamaRejected(Exception):
+class LLMRejected(Exception):
     pass
 
 
@@ -48,9 +48,9 @@ def allowed_numbers(facts: dict[str, Any], user_message: str) -> set[str]:
 def validate(text: str, facts: dict[str, Any], user_message: str) -> str:
     text = text.strip()
     if not text:
-        raise OllamaRejected("empty response")
+        raise LLMRejected("empty response")
     if _BANNED.search(text):
-        raise OllamaRejected("claims a booking/confirmation")
+        raise LLMRejected("claims a booking/confirmation")
     allowed = allowed_numbers(facts, user_message)
     for n in _NUM.findall(text):
         v = _norm(n)
@@ -58,45 +58,41 @@ def validate(text: str, facts: dict[str, Any], user_message: str) -> str:
             continue
         if re.fullmatch(r"\d{1,2}", v) and int(v) <= 10:  # counts like "3 options"
             continue
-        raise OllamaRejected(f"unverified number in output: {n}")
+        raise LLMRejected(f"unverified number in output: {n}")
     return text
-
-
-async def warm_up(settings: Settings) -> None:
-    """Best-effort: load the model into memory so the first customer question isn't a cold start."""
-    if not settings.ollama_enabled:
-        return
-    try:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=2.0)) as client:
-            await client.post(f"{settings.ollama_url}/api/chat", json={
-                "model": settings.ollama_model, "stream": False, "keep_alive": "30m",
-                "options": {"num_predict": 1}, "messages": [{"role": "user", "content": "hi"}]})
-    except httpx.HTTPError:
-        pass  # Ollama not running: chat will use the labelled rule-based fallback
 
 
 async def explain(settings: Settings, facts: dict[str, Any], user_message: str,
                   transport: httpx.AsyncBaseTransport | None = None) -> str:
-    if not settings.ollama_enabled:
-        raise OllamaUnavailable("Ollama disabled by configuration")
+    """Ask Groq (OpenAI-compatible chat completions) to word a short intro from verified facts."""
+    if not settings.llm_enabled:
+        raise LLMUnavailable("AI wording disabled by configuration")
+    if not settings.groq_api_key:
+        raise LLMUnavailable("AI wording not configured (no GROQ_API_KEY)")
     payload = {
-        "model": settings.ollama_model,
-        "stream": False,
-        "keep_alive": "30m",
-        "options": {"temperature": 0.2, "num_predict": 200},
+        "model": settings.llm_model,
+        "temperature": 0.2,
+        "max_tokens": 200,
         "messages": [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"Customer said: {user_message}\n\nVerified facts (JSON):\n"
                                          f"{json.dumps(facts, ensure_ascii=False)}"},
         ],
     }
+    headers = {"Authorization": f"Bearer {settings.groq_api_key}", "Content-Type": "application/json"}
     try:
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(settings.ollama_timeout, connect=2.0), transport=transport
+            timeout=httpx.Timeout(settings.llm_timeout, connect=5.0), transport=transport
         ) as client:
-            r = await client.post(f"{settings.ollama_url}/api/chat", json=payload)
-            r.raise_for_status()
-            content = r.json()["message"]["content"]
-    except (httpx.HTTPError, KeyError, ValueError) as exc:
-        raise OllamaUnavailable(f"Ollama unavailable ({type(exc).__name__})") from exc
+            r = await client.post(f"{settings.llm_base_url}/chat/completions", json=payload, headers=headers)
+        if r.status_code == 429:
+            raise LLMUnavailable("AI service rate-limited, try again shortly")
+        r.raise_for_status()
+        content = r.json()["choices"][0]["message"]["content"] or ""
+    except LLMUnavailable:
+        raise
+    except httpx.HTTPStatusError as exc:
+        raise LLMUnavailable(f"AI service unavailable (HTTP {exc.response.status_code})") from exc
+    except (httpx.HTTPError, KeyError, IndexError, ValueError, TypeError) as exc:
+        raise LLMUnavailable(f"AI service unavailable ({type(exc).__name__})") from exc
     return validate(content, facts, user_message)

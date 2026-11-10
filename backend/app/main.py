@@ -13,7 +13,7 @@ from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 from starlette.websockets import WebSocketDisconnect
 
-from . import gnani, llm
+from . import gnani
 from .assistant import handle_chat
 from .cache import VehicleCache
 from .config import Settings
@@ -45,7 +45,7 @@ def _init_db(engine, session_factory, retries: int = 15) -> None:
 def create_app(
     settings: Settings | None = None,
     redis_client: Any | None = "auto",  # type: ignore[assignment]
-    ollama_transport: httpx.AsyncBaseTransport | None = None,
+    llm_transport: httpx.AsyncBaseTransport | None = None,
     gnani_transport: httpx.AsyncBaseTransport | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
@@ -69,10 +69,7 @@ def create_app(
     async def lifespan(app: FastAPI):
         await asyncio.get_running_loop().run_in_executor(None, _init_db, engine, SessionLocal)
         await cache.ping()
-        warm = asyncio.create_task(llm.warm_up(settings)) if ollama_transport is None else None
         yield
-        if warm:
-            warm.cancel()
         if redis_client is not None and hasattr(redis_client, "aclose"):
             try:
                 await redis_client.aclose()
@@ -111,8 +108,10 @@ def create_app(
             "status": "ok" if db_ok else "degraded",
             "database": db_ok,
             "redis": redis_ok,
-            "voice_configured": bool(settings.gnani_api_key),
-            "ollama_enabled": settings.ollama_enabled,
+            "profile": settings.demo_profile,
+            "voice_enabled": settings.voice_enabled,
+            "voice_configured": settings.voice_enabled and bool(settings.gnani_api_key),
+            "llm_enabled": settings.llm_enabled and bool(settings.groq_api_key),
             "time": iso(datetime.now(timezone.utc)),
         }
 
@@ -124,8 +123,8 @@ def create_app(
             "inventory": counts(s),
             "websocket_clients": len(hub.connections),
             "events": list(hub.log)[:30],
-            "ollama": {"enabled": settings.ollama_enabled, "model": settings.ollama_model},
-            "voice_configured": bool(settings.gnani_api_key),
+            "llm": {"enabled": settings.llm_enabled and bool(settings.groq_api_key), "model": settings.llm_model},
+            "voice_configured": settings.voice_enabled and bool(settings.gnani_api_key),
             "admin_token_required": bool(settings.admin_token),
         }
 
@@ -202,7 +201,7 @@ def create_app(
     @app.post("/api/chat", response_model=ChatResponse)
     async def chat(body: ChatRequest, s: Session = Depends(get_session)):
         try:
-            return await handle_chat(body, s, settings, ollama_transport)
+            return await handle_chat(body, s, settings, llm_transport)
         except HTTPException:
             raise
         except Exception as exc:
@@ -212,6 +211,8 @@ def create_app(
     # ---- voice (Gnani) ---------------------------------------------------------------
     @app.post("/api/voice/transcribe")
     async def transcribe(audio: UploadFile = File(...)):
+        if not settings.voice_enabled:
+            raise HTTPException(404, {"code": "voice_disabled", "message": "Voice is disabled in this demo profile"})
         if not settings.gnani_api_key:
             raise HTTPException(503, {"code": "voice_setup_required", "message": "Voice setup required"})
         data = await audio.read(gnani.STT_MAX_BYTES + 1)
@@ -227,6 +228,8 @@ def create_app(
 
     @app.post("/api/voice/synthesize")
     async def synthesize(body: SynthesizeRequest):
+        if not settings.voice_enabled:
+            raise HTTPException(404, {"code": "voice_disabled", "message": "Voice is disabled in this demo profile"})
         if not settings.gnani_api_key:
             raise HTTPException(503, {"code": "voice_setup_required", "message": "Voice setup required"})
         try:

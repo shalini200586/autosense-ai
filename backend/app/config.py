@@ -28,10 +28,12 @@ class Settings:
     redis_url: str = "redis://localhost:6379/0"
     cors_origins: tuple[str, ...] = ("http://localhost:5173", "http://localhost:8090")
     cache_ttl_seconds: int = 30
-    ollama_enabled: bool = True
-    ollama_url: str = "http://localhost:11434"
-    ollama_model: str = "qwen2.5:7b"
-    ollama_timeout: float = 45.0
+    # Optional AI wording via Groq's OpenAI-compatible API (https://console.groq.com). No key => rule-based answers.
+    llm_enabled: bool = True
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: str = "llama-3.3-70b-versatile"  # check console.groq.com for currently available models
+    llm_timeout: float = 20.0
+    groq_api_key: str = field(default="", repr=False)
     gnani_api_key: str = field(default="", repr=False)
     gnani_stt_url: str = "https://api.vachana.ai/stt/v3"
     gnani_tts_url: str = "https://api.vachana.ai/api/v1/tts/inference"
@@ -42,6 +44,9 @@ class Settings:
     gnani_tts_voice_hi: str = "Nalini"
     gnani_tts_voice_en: str = "Kaveri"
     admin_token: str = field(default="", repr=False)
+    # "gnani": voice-first demo, Gnani Prisma/Timbre named on screen.
+    # "spyne": inventory-sync demo; voice disabled and no Gnani mention anywhere in the UI/API.
+    demo_profile: str = "gnani"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -54,10 +59,11 @@ class Settings:
                 o.strip() for o in g("CORS_ORIGINS", ",".join(d.cors_origins)).split(",") if o.strip()
             ),
             cache_ttl_seconds=int(g("CACHE_TTL_SECONDS", d.cache_ttl_seconds)),
-            ollama_enabled=_bool("OLLAMA_ENABLED", d.ollama_enabled),
-            ollama_url=g("OLLAMA_URL", d.ollama_url).rstrip("/"),
-            ollama_model=g("OLLAMA_MODEL", d.ollama_model),
-            ollama_timeout=float(g("OLLAMA_TIMEOUT", d.ollama_timeout)),
+            llm_enabled=_bool("LLM_ENABLED", d.llm_enabled),
+            llm_base_url=g("LLM_BASE_URL", d.llm_base_url).rstrip("/"),
+            llm_model=g("LLM_MODEL", d.llm_model),
+            llm_timeout=float(g("LLM_TIMEOUT", d.llm_timeout)),
+            groq_api_key=g("GROQ_API_KEY", ""),
             gnani_api_key=g("GNANI_API_KEY", ""),
             gnani_stt_url=g("GNANI_STT_URL", d.gnani_stt_url),
             gnani_tts_url=g("GNANI_TTS_URL", d.gnani_tts_url),
@@ -68,4 +74,9 @@ class Settings:
             gnani_tts_voice_hi=g("GNANI_TTS_VOICE_HI", d.gnani_tts_voice_hi),
             gnani_tts_voice_en=g("GNANI_TTS_VOICE_EN", d.gnani_tts_voice_en),
             admin_token=g("ADMIN_TOKEN", ""),
+            demo_profile=g("DEMO_PROFILE", d.demo_profile).strip().lower(),
         )
+
+    @property
+    def voice_enabled(self) -> bool:
+        return self.demo_profile != "spyne"
