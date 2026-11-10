@@ -17,3 +17,7 @@ __pycache__/
 .idea/
 .DS_Store
 *.log
+
+# private demo scripts (kept locally only)
+DEMO_SPYNE.md
+DEMO_GNANI.md
