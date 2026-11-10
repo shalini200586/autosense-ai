@@ -27,6 +27,8 @@ def _name(d: dict[str, Any]) -> str:
 
 def _desc(c: nlu.Criteria) -> str:
     parts = []
+    if c.makes:
+        parts.append("/".join(c.makes))
     if c.transmission:
         parts.append(c.transmission.lower())
     if fuelled := c.fuel:
@@ -128,6 +130,15 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
     c, lang, intent = parsed.criteria, parsed.language, parsed.intent
     checked_at = iso(datetime.now(timezone.utc))
 
+    # Short follow-ups such as "what about Hyundai?" keep the customer's earlier filters.
+    prev = _coerce_criteria(req.last_criteria)
+    if (prev and intent in ("search", "unknown") and not c.models and c.has_filters()
+            and len(req.message.split()) <= 6 and not (c.max_price and (c.body_type or c.transmission))):
+        for f in ("max_price", "min_price", "transmission", "body_type", "fuel"):
+            if getattr(c, f) is None and getattr(prev, f) is not None:
+                setattr(c, f, getattr(prev, f))
+        intent = "search"
+
     vehicles: list[dict] = []
     alternatives: list[dict] = []
     td_id: int | None = None
@@ -192,11 +203,15 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
             "नमस्ते! अपना बजट, बॉडी टाइप और ट्रांसमिशन बताइए, जैसे “12 लाख के अंदर ऑटोमैटिक SUV”।",
         )
     else:
+        makes = ", ".join(sorted({m for m, _ in catalog}))
         fallback_reply = _t(
             lang,
-            "I can search inventory by budget, transmission, body type, fuel or model. Try “automatic SUV under 12 lakh”.",
-            "Main budget, transmission, body type, fuel ya model se inventory search kar sakta hoon. Try kijiye: “12 lakh ke andar automatic SUV”.",
-            "मैं बजट, ट्रांसमिशन, बॉडी टाइप, ईंधन या मॉडल से इन्वेंटरी खोज सकता हूँ। कोशिश करें: “12 लाख के अंदर ऑटोमैटिक SUV”।",
+            f"I didn’t quite catch that. We currently stock {makes}. You can ask by make, budget, body type, "
+            "transmission or fuel, for example “Hyundai under 10 lakh” or “automatic SUV under 12 lakh”.",
+            f"Ye mujhe samajh nahi aaya. Abhi hamare paas {makes} ki gaadiyan hain. Aap make, budget, body type, "
+            "transmission ya fuel se poochh sakte hain, jaise “10 lakh ke andar Hyundai” ya “12 lakh ke andar automatic SUV”.",
+            f"मैं यह ठीक से समझ नहीं पाया। अभी हमारे पास {makes} की गाड़ियाँ हैं। आप ब्रांड, बजट, बॉडी टाइप, "
+            "ट्रांसमिशन या ईंधन से पूछ सकते हैं, जैसे “10 लाख के अंदर Hyundai” या “12 लाख के अंदर ऑटोमैटिक SUV”।",
         )
 
     reply, source, reason = fallback_reply, "fallback", "Deterministic rule-based answer"
@@ -226,6 +241,22 @@ async def handle_chat(req: ChatRequest, session: Session, settings: Settings,
         alternatives=alternatives, source=source, fallback_reason=reason,
         checked_at=checked_at, test_drive_request_id=td_id,
     )
+
+
+def _coerce_criteria(d: Any) -> nlu.Criteria | None:
+    """Rebuild the previous turn's filters from client-sent JSON, accepting only known, valid values."""
+    if not isinstance(d, dict):
+        return None
+    c = nlu.Criteria()
+    for k in ("max_price", "min_price"):
+        v = d.get(k)
+        if isinstance(v, int) and not isinstance(v, bool) and 0 < v <= 100_000_000:
+            setattr(c, k, v)
+    for k, allowed in (("transmission", {"Automatic", "Manual"}), ("body_type", {"SUV", "Sedan", "Hatchback", "MPV"}),
+                       ("fuel", {"Petrol", "Diesel", "CNG", "Electric"})):
+        if d.get(k) in allowed:
+            setattr(c, k, d[k])
+    return c if c.has_filters() else None
 
 
 def _fact(d: dict) -> dict:

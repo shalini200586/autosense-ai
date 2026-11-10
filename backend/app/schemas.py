@@ -26,6 +26,7 @@ class ChatRequest(BaseModel):
 
     message: str = Field(min_length=1, max_length=600)
     last_vehicle_ids: list[str] = Field(default_factory=list, max_length=10)
+    last_criteria: dict[str, Any] | None = None  # previous turn's filters, for "what about X?" follow-ups
 
 
 class ChatResponse(BaseModel):
