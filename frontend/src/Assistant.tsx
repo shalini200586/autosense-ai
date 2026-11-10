@@ -9,6 +9,9 @@ type Msg =
   | { role: "assistant"; data: ChatResponse; outdatedBy?: string[] }
   | { role: "error"; text: string };
 
+/** Drops the speech-vendor prefix from server error messages so it never appears in the UI. */
+const plain = (m: string) => m.replace(/^Gnani (?:Prisma|Timbre):\s*/, "");
+
 const SUGGESTIONS = [
   "Mujhe 12 lakh ke andar automatic SUV chahiye",
   "Automatic SUV under 12 lakh",
@@ -55,7 +58,7 @@ export default function Assistant() {
       await a.play();
     } catch (e) {
       setSpeaking(null);
-      setVoiceNote(e instanceof ApiError && e.code === "voice_setup_required" ? "Voice setup required" : `Speech playback unavailable: ${(e as Error).message}`);
+      setVoiceNote(e instanceof ApiError && e.code === "voice_setup_required" ? "Voice setup required" : `Speech playback unavailable: ${plain((e as Error).message)}`);
     }
   }, []);
 
@@ -93,7 +96,7 @@ export default function Assistant() {
       if (!res.transcript.trim()) setVoiceNote("I couldn't hear anything. Please try again.");
       else await sendRef.current(res.transcript, true);
     } catch (e) {
-      setVoiceNote(e instanceof ApiError && e.code === "voice_setup_required" ? "Voice setup required" : `Speech recognition failed: ${(e as Error).message}`);
+      setVoiceNote(e instanceof ApiError && e.code === "voice_setup_required" ? "Voice setup required" : `Speech recognition failed: ${plain((e as Error).message)}`);
     } finally { setRec("idle"); }
   };
 
@@ -176,7 +179,7 @@ export default function Assistant() {
         <button className="btn btn-primary h-10 shrink-0" disabled={busy || !input.trim()} aria-label="Send"><Send size={15} /></button>
       </form>
       <div className="mt-2 flex justify-between text-[11px] text-mute">
-        <span>{health && !health.voice_configured ? "Voice setup required · text chat is fully available" : "Voice: Gnani Prisma (speech-to-text) · Timbre (text-to-speech)"}</span>
+        <span>{health && !health.voice_configured ? "Voice setup required · text chat is fully available" : "Voice input and spoken replies available · tap the mic to speak"}</span>
         <span>{socket === "open" ? "Live inventory updates on" : "Reconnecting to live updates…"}</span>
       </div>
     </div>
